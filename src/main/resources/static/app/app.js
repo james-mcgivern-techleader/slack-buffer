@@ -41,20 +41,33 @@
     );
   }
 
-  function Home() {
+  function Home(props) {
     return e(
       React.Fragment,
       null,
       e("h1", null, "slack-buffer"),
+      props.user
+        ? e(
+            "p",
+            { className: "muted" },
+            "Signed in as ",
+            props.user.email,
+            "."
+          )
+        : e(
+            "p",
+            { className: "muted" },
+            "Not signed in. Use Login or Sign up to continue."
+          ),
       e(
         "p",
         { className: "muted" },
-        "Web UI skeleton is running. Slack events endpoint is /slack/events."
+        "Slack events endpoint is /slack/events."
       )
     );
   }
 
-  function Login() {
+  function Login(props) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [status, setStatus] = useState(null);
@@ -71,12 +84,13 @@
         });
         const data = await res.json();
 
-        if (res.ok && (data.ok === true || data.ok === "true")) {
+        if (res.ok && data && data.ok === true && data.token) {
+          props.onAuth({ token: data.token, email: data.email });
           navigate("/");
           return;
         }
 
-        setStatus(data.message || "Login failed.");
+        setStatus((data && data.message) || "Login failed.");
       } catch (err) {
         setStatus("Login failed.");
       }
@@ -122,7 +136,7 @@
     );
   }
 
-  function Signup() {
+  function Signup(props) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [status, setStatus] = useState(null);
@@ -138,7 +152,14 @@
           body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
-        setStatus(data.message || "Signed up.");
+
+        if (res.ok && data && data.ok === true && data.token) {
+          props.onAuth({ token: data.token, email: data.email });
+          navigate("/");
+          return;
+        }
+
+        setStatus((data && data.message) || "Signup failed.");
       } catch (err) {
         setStatus("Signup failed.");
       }
@@ -184,6 +205,52 @@
     );
   }
 
+  function CreateView() {
+    return e(
+      "div",
+      null,
+      e("h1", null, "Create"),
+      e("p", { className: "muted" }, "Compose a post (placeholder).")
+    );
+  }
+
+  function ScheduledView() {
+    return e(
+      "div",
+      null,
+      e("h1", null, "Scheduled"),
+      e("p", { className: "muted" }, "Scheduled posts (placeholder).")
+    );
+  }
+
+  function PublishedView() {
+    return e(
+      "div",
+      null,
+      e("h1", null, "Published"),
+      e("p", { className: "muted" }, "Published posts (placeholder).")
+    );
+  }
+
+  function Profile(props) {
+    if (!props.user) {
+      return e(
+        "div",
+        null,
+        e("h1", null, "Profile"),
+        e("p", { className: "muted" }, "You are not signed in."),
+        e(Link, { to: "/login", className: "link" }, "Go to login")
+      );
+    }
+
+    return e(
+      "div",
+      null,
+      e("h1", null, "Profile"),
+      e("p", { className: "muted" }, "Email: ", props.user.email)
+    );
+  }
+
   function NotFound(props) {
     return e(
       "div",
@@ -196,29 +263,117 @@
   function App() {
     const pathname = usePathname();
 
+    const [auth, setAuth] = useState(() => {
+      try {
+        const raw = window.localStorage.getItem("slackBufferAuth");
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    });
+
+    const user = auth && auth.email ? { email: auth.email } : null;
+
+    function onAuth(nextAuth) {
+      setAuth(nextAuth);
+      try {
+        window.localStorage.setItem("slackBufferAuth", JSON.stringify(nextAuth));
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    useEffect(() => {
+      // If we have a token, verify it and hydrate user info.
+      if (!auth || !auth.token) return;
+
+      (async () => {
+        try {
+          const res = await fetch("/api/auth/me", {
+            headers: { Authorization: "Bearer " + auth.token },
+          });
+          if (!res.ok) throw new Error("unauthorized");
+          const data = await res.json();
+          if (data && data.ok === true && data.email) {
+            onAuth({ token: auth.token, email: data.email });
+          } else {
+            throw new Error("unauthorized");
+          }
+        } catch (e) {
+          setAuth(null);
+          try {
+            window.localStorage.removeItem("slackBufferAuth");
+          } catch (e) {
+            // ignore
+          }
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const view = useMemo(() => {
       // Normalize in case user hits /app/* routes
       const p = pathname.startsWith("/app/") ? pathname.slice(4) : pathname;
 
-      if (p === "/" || p === "") return e(Home);
-      if (p === "/login") return e(Login);
-      if (p === "/signup") return e(Signup);
+      if (p === "/" || p === "") return e(Home, { user });
+      if (p === "/create") return e(CreateView);
+      if (p === "/scheduled") return e(ScheduledView);
+      if (p === "/published") return e(PublishedView);
+      if (p === "/login") return e(Login, { onAuth });
+      if (p === "/signup") return e(Signup, { onAuth });
+      if (p === "/profile") return e(Profile, { user });
       return e(NotFound, { pathname: pathname });
-    }, [pathname]);
+    }, [pathname, user]);
 
     return e(
       "div",
       { className: "container" },
       e(
-        "nav",
-        { className: "nav" },
-        e(Link, { to: "/", className: "brand" }, "slack-buffer"),
+        "header",
+        { className: "header" },
         e(
           "div",
-          { className: "navLinks" },
-          e(Link, { to: "/login", className: "link" }, "Login"),
-          e(Link, { to: "/signup", className: "link" }, "Sign up")
-        )
+          { className: "topBar" },
+          e(Link, { to: "/", className: "brand" }, "slack-buffer"),
+          e(
+            "div",
+            { className: "navLinks" },
+            user
+              ? e(Link, { to: "/profile", className: "link" }, "Profile")
+              : e(
+                  React.Fragment,
+                  null,
+                  e(Link, { to: "/login", className: "link" }, "Login"),
+                  e(Link, { to: "/signup", className: "link" }, "Sign up")
+                )
+          )
+        ),
+        user
+          ? e(
+              "nav",
+              { className: "menu" },
+              e(
+                "ul",
+                { className: "menuList" },
+                e("li", null, e(Link, { to: "/", className: "menuLink" }, "Home")),
+                e(
+                  "li",
+                  null,
+                  e(Link, { to: "/create", className: "menuLink" }, "Create")
+                ),
+                e(
+                  "li",
+                  null,
+                  e(Link, { to: "/scheduled", className: "menuLink" }, "Scheduled")
+                ),
+                e(
+                  "li",
+                  null,
+                  e(Link, { to: "/published", className: "menuLink" }, "Published")
+                )
+              )
+            )
+          : null
       ),
       e("div", { className: "card" }, view)
     );

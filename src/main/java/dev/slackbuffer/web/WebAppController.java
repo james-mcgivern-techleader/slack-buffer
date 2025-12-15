@@ -8,12 +8,20 @@ public class WebAppController {
 
   @GetMapping({
       "/",
+      "/create",
+      "/scheduled",
+      "/published",
       "/login",
       "/signup",
+      "/profile",
       "/app",
       "/app/",
+      "/app/create",
+      "/app/scheduled",
+      "/app/published",
       "/app/login",
-      "/app/signup"
+      "/app/signup",
+      "/app/profile"
   })
   public String app() {
     return "forward:/app/index.html";
