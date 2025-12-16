@@ -496,6 +496,24 @@
       }
     }
 
+    async function logout() {
+      try {
+        // Best-effort: clear server cookie + revoke token
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch (e) {
+        // ignore
+      }
+
+      setAuth(null);
+      try {
+        window.localStorage.removeItem("slackBufferAuth");
+      } catch (e) {
+        // ignore
+      }
+
+      navigate("/");
+    }
+
     useEffect(() => {
       // If we have a token, verify it and hydrate user info.
       if (!auth || !auth.token) return;
@@ -523,6 +541,23 @@
       })();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+      const protectedPaths = [
+        "/create",
+        "/scheduled",
+        "/published",
+        "/profile",
+        "/app/create",
+        "/app/scheduled",
+        "/app/published",
+        "/app/profile",
+      ];
+
+      if (!user && protectedPaths.includes(pathname)) {
+        navigate("/login");
+      }
+    }, [pathname, user]);
 
     const view = useMemo(() => {
       // Normalize in case user hits /app/* routes
@@ -552,7 +587,23 @@
             "div",
             { className: "navLinks" },
             user
-              ? e(Link, { to: "/profile", className: "link" }, "Profile")
+              ? e(
+                  React.Fragment,
+                  null,
+                  e(Link, { to: "/profile", className: "link" }, "Profile"),
+                  e(
+                    "a",
+                    {
+                      href: "/logout",
+                      className: "link",
+                      onClick: (evt) => {
+                        evt.preventDefault();
+                        logout();
+                      },
+                    },
+                    "Logout"
+                  )
+                )
               : e(
                   React.Fragment,
                   null,
