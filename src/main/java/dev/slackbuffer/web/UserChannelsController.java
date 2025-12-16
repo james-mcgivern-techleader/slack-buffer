@@ -10,8 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/api/user")
 public class UserChannelsController {
 
-  public record Channel(String id, String name) {}
-
   @GetMapping("/channels")
   public ResponseEntity<List<Channel>> channels() {
     // TODO: replace with real Slack-backed channel list for the authenticated user

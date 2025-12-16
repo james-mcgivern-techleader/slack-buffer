@@ -76,6 +76,40 @@ body {
   padding: 18px;
 }
 
+.postList {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.postCard {
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
+}
+
+.postMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.postChannel {
+  font-weight: 700;
+}
+
+.postTime {
+  color: #666;
+  font-size: 12px;
+}
+
+.postText {
+  white-space: pre-wrap;
+}
+
 .form {
   display: grid;
   gap: 12px;
