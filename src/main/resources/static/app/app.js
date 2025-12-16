@@ -205,12 +205,106 @@
     );
   }
 
-  function CreateView() {
+  function CreateView(props) {
+    const [text, setText] = useState("");
+    const [scheduledAt, setScheduledAt] = useState("");
+    const [channelId, setChannelId] = useState("");
+    const [channels, setChannels] = useState([]);
+    const [channelsStatus, setChannelsStatus] = useState("Loading channels...");
+    const [status, setStatus] = useState(null);
+
+    useEffect(() => {
+      (async () => {
+        try {
+          const headers = {};
+          if (props && props.authToken) {
+            headers.Authorization = "Bearer " + props.authToken;
+          }
+
+          const res = await fetch("/v1/api/user/channels", { headers });
+          if (!res.ok) throw new Error("failed");
+
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : [];
+          setChannels(list);
+          setChannelsStatus(null);
+
+          if (!channelId && list.length > 0) {
+            setChannelId(list[0].id);
+          }
+        } catch (err) {
+          setChannels([]);
+          setChannelsStatus("Failed to load channels.");
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    async function onSubmit(evt) {
+      evt.preventDefault();
+      setStatus("Scheduling...");
+
+      // TODO: wire up to real backend endpoint
+      // For now, simulate a successful schedule.
+      await Promise.resolve();
+      setStatus(
+        "Scheduled (stub) for channel " +
+          (channelId || "(none)") +
+          ". Check Scheduled tab once backend is implemented."
+      );
+    }
+
+    const channelSelectDisabled = channels.length === 0;
+
     return e(
       "div",
       null,
       e("h1", null, "Create"),
-      e("p", { className: "muted" }, "Compose a post (placeholder).")
+      e(
+        "form",
+        { className: "form", onSubmit },
+        e(
+          "label",
+          null,
+          e("div", { className: "label" }, "Channel"),
+          e(
+            "select",
+            {
+              value: channelId,
+              onChange: (evt) => setChannelId(evt.target.value),
+              disabled: channelSelectDisabled,
+              required: true,
+            },
+            channels.map((c) => e("option", { key: c.id, value: c.id }, c.name))
+          ),
+          channelsStatus ? e("div", { className: "hint" }, channelsStatus) : null
+        ),
+        e(
+          "label",
+          null,
+          e("div", { className: "label" }, "Message"),
+          e("textarea", {
+            rows: 5,
+            value: text,
+            onChange: (evt) => setText(evt.target.value),
+            placeholder: "Write something to post...",
+            required: true,
+          })
+        ),
+        e(
+          "label",
+          null,
+          e("div", { className: "label" }, "Schedule for"),
+          e("input", {
+            type: "datetime-local",
+            value: scheduledAt,
+            onChange: (evt) => setScheduledAt(evt.target.value),
+            required: true,
+          })
+        ),
+        e("button", { type: "submit" }, "Schedule")
+      ),
+      status ? e("p", { className: "muted" }, status) : null
     );
   }
 
@@ -316,7 +410,7 @@
       const p = pathname.startsWith("/app/") ? pathname.slice(4) : pathname;
 
       if (p === "/" || p === "") return e(Home, { user });
-      if (p === "/create") return e(CreateView);
+      if (p === "/create") return e(CreateView, { authToken: auth && auth.token });
       if (p === "/scheduled") return e(ScheduledView);
       if (p === "/published") return e(PublishedView);
       if (p === "/login") return e(Login, { onAuth });
