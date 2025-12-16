@@ -376,12 +376,72 @@
     );
   }
 
-  function PublishedView() {
+  function PublishedView(props) {
+    const [posts, setPosts] = useState([]);
+    const [status, setStatus] = useState("Loading published posts...");
+
+    useEffect(() => {
+      (async () => {
+        try {
+          const headers = {};
+          if (props && props.authToken) {
+            headers.Authorization = "Bearer " + props.authToken;
+          }
+
+          const res = await fetch("/v1/api/published-posts", { headers });
+          if (!res.ok) throw new Error("failed");
+
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : [];
+
+          // Most recent (closest to now) first; oldest last.
+          list.sort((a, b) => {
+            const at = new Date(a.scheduledAt).getTime();
+            const bt = new Date(b.scheduledAt).getTime();
+            return bt - at;
+          });
+
+          setPosts(list);
+          setStatus(null);
+        } catch (err) {
+          setPosts([]);
+          setStatus("Failed to load published posts.");
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    function formatDateTime(iso) {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString();
+    }
+
     return e(
       "div",
       null,
       e("h1", null, "Published"),
-      e("p", { className: "muted" }, "Published posts (placeholder).")
+      status ? e("p", { className: "muted" }, status) : null,
+      !status && posts.length === 0
+        ? e("p", { className: "muted" }, "No published posts.")
+        : null,
+      e(
+        "div",
+        { className: "postList" },
+        posts.map((p) =>
+          e(
+            "div",
+            { key: p.id, className: "postCard" },
+            e(
+              "div",
+              { className: "postMeta" },
+              e("span", { className: "postChannel" }, p.channelName || p.channelId),
+              e("span", { className: "postTime" }, formatDateTime(p.scheduledAt))
+            ),
+            e("div", { className: "postText" }, p.text)
+          )
+        )
+      )
     );
   }
 
@@ -471,7 +531,7 @@
       if (p === "/" || p === "") return e(Home, { user });
       if (p === "/create") return e(CreateView, { authToken: auth && auth.token });
       if (p === "/scheduled") return e(ScheduledView, { authToken: auth && auth.token });
-      if (p === "/published") return e(PublishedView);
+      if (p === "/published") return e(PublishedView, { authToken: auth && auth.token });
       if (p === "/login") return e(Login, { onAuth });
       if (p === "/signup") return e(Signup, { onAuth });
       if (p === "/profile") return e(Profile, { user });
