@@ -18,6 +18,8 @@ public class SlackPostService {
   }
 
   public SlackPost create(SlackPost post) {
+    validateScheduledAtNotInPast(post.scheduledAt());
+
     String id = post.postId() != null && !post.postId().isBlank() ? post.postId() : newId();
     SlackPost normalized =
         new SlackPost(id, post.channelId(), post.channelName(), post.text(), post.scheduledAt());
@@ -37,6 +39,8 @@ public class SlackPostService {
             post.channelName() != null ? post.channelName() : existing.channelName(),
             post.text() != null ? post.text() : existing.text(),
             post.scheduledAt() != null ? post.scheduledAt() : existing.scheduledAt());
+
+    validateScheduledAtNotInPast(merged.scheduledAt());
 
     return repository.save(merged);
   }
@@ -83,4 +87,12 @@ public class SlackPostService {
     return "sp_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
   }
 
+  private static void validateScheduledAtNotInPast(Instant scheduledAt) {
+    if (scheduledAt == null) return;
+
+    Instant now = Instant.now();
+    if (scheduledAt.isBefore(now)) {
+      throw new IllegalArgumentException("scheduledAt must be now or in the future");
+    }
+  }
 }

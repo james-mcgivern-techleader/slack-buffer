@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import dev.slackbuffer.model.SlackPost;
 import java.time.Instant;
-import java.util.List;
+import java.time.temporal.ChronoUnit;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -20,19 +20,9 @@ import org.mockito.ArgumentCaptor;
 
 class SlackPostServiceTest {
 
-  private static SlackPost seedMarkerPost() {
-    return new SlackPost(
-        "seed",
-        "C_seed",
-        "#seed",
-        "seed",
-        Instant.parse("2025-01-01T00:00:00Z"));
-  }
-
   @Test
   void create_savesNewSlackPostAndAssignsIdWhenMissing() {
     SlackPostRepository repo = mock(SlackPostRepository.class);
-    when(repo.findAll()).thenReturn(List.of(seedMarkerPost()));
     when(repo.save(any(SlackPost.class))).thenAnswer(inv -> inv.getArgument(0));
 
     SlackPostService service = new SlackPostService(repo);
@@ -44,7 +34,7 @@ class SlackPostServiceTest {
                 "C123",
                 "#general",
                 "hello",
-                Instant.parse("2025-02-01T00:00:00Z")));
+                Instant.now().plus(1, ChronoUnit.HOURS)));
 
     assertNotNull(created.postId());
     assertTrue(!created.postId().isBlank());
@@ -56,9 +46,24 @@ class SlackPostServiceTest {
   }
 
   @Test
+  void create_throwsWhenScheduledAtIsInThePast() {
+    SlackPostRepository repo = mock(SlackPostRepository.class);
+    SlackPostService service = new SlackPostService(repo);
+
+    SlackPost past =
+        new SlackPost(
+            null,
+            "C123",
+            "#general",
+            "hello",
+            Instant.now().minus(1, ChronoUnit.MINUTES));
+
+    assertThrows(IllegalArgumentException.class, () -> service.create(past));
+  }
+
+  @Test
   void update_modifiesExistingSlackPost() {
     SlackPostRepository repo = mock(SlackPostRepository.class);
-    when(repo.findAll()).thenReturn(List.of(seedMarkerPost()));
 
     SlackPost existing =
         new SlackPost(
@@ -66,7 +71,7 @@ class SlackPostServiceTest {
             "C123",
             "#general",
             "old",
-            Instant.parse("2025-03-01T00:00:00Z"));
+            Instant.now().plus(2, ChronoUnit.HOURS));
 
     when(repo.findByPostId("sp_123")).thenReturn(Optional.of(existing));
     when(repo.save(any(SlackPost.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -89,7 +94,7 @@ class SlackPostServiceTest {
             "C123",
             "#general",
             "new",
-            Instant.parse("2025-03-01T00:00:00Z"));
+            existing.scheduledAt());
 
     assertEquals(expected, updated);
 
@@ -99,9 +104,35 @@ class SlackPostServiceTest {
   }
 
   @Test
+  void update_throwsWhenScheduledAtIsInThePast() {
+    SlackPostRepository repo = mock(SlackPostRepository.class);
+
+    SlackPost existing =
+        new SlackPost(
+            "sp_123",
+            "C123",
+            "#general",
+            "old",
+            Instant.now().plus(2, ChronoUnit.HOURS));
+
+    when(repo.findByPostId("sp_123")).thenReturn(Optional.of(existing));
+
+    SlackPostService service = new SlackPostService(repo);
+
+    SlackPost patch =
+        new SlackPost(
+            null,
+            null,
+            null,
+            "new",
+            Instant.now().minus(1, ChronoUnit.MINUTES));
+
+    assertThrows(IllegalArgumentException.class, () -> service.update("sp_123", patch));
+  }
+
+  @Test
   void update_throwsWhenSlackPostDoesNotExist() {
     SlackPostRepository repo = mock(SlackPostRepository.class);
-    when(repo.findAll()).thenReturn(List.of(seedMarkerPost()));
     when(repo.findByPostId("missing")).thenReturn(Optional.empty());
 
     SlackPostService service = new SlackPostService(repo);
@@ -114,7 +145,6 @@ class SlackPostServiceTest {
   @Test
   void upsert_createsWhenSlackPostDoesNotExistForId() {
     SlackPostRepository repo = mock(SlackPostRepository.class);
-    when(repo.findAll()).thenReturn(List.of(seedMarkerPost()));
     when(repo.findByPostId("sp_999")).thenReturn(Optional.empty());
     when(repo.save(any(SlackPost.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -128,7 +158,7 @@ class SlackPostServiceTest {
                 "C999",
                 "#random",
                 "hello",
-                Instant.parse("2025-04-01T00:00:00Z")));
+                Instant.now().plus(3, ChronoUnit.HOURS)));
 
     assertEquals("sp_999", result.postId());
 
@@ -142,7 +172,6 @@ class SlackPostServiceTest {
   @Test
   void upsert_updatesWhenSlackPostAlreadyExistsForId() {
     SlackPostRepository repo = mock(SlackPostRepository.class);
-    when(repo.findAll()).thenReturn(List.of(seedMarkerPost()));
 
     SlackPost existing =
         new SlackPost(
@@ -150,7 +179,7 @@ class SlackPostServiceTest {
             "C777",
             "#general",
             "old",
-            Instant.parse("2025-05-01T00:00:00Z"));
+            Instant.now().plus(4, ChronoUnit.HOURS));
 
     when(repo.findByPostId("sp_777")).thenReturn(Optional.of(existing));
     when(repo.save(any(SlackPost.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -165,7 +194,7 @@ class SlackPostServiceTest {
             "C777",
             "#general",
             "new",
-            Instant.parse("2025-05-01T00:00:00Z"));
+            existing.scheduledAt());
 
     assertEquals(expected, result);
 

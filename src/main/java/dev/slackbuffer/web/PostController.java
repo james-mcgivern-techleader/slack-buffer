@@ -5,6 +5,7 @@ import dev.slackbuffer.post.SlackPostService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/api")
 public class PostController {
+
+  public record ApiError(boolean ok, String message) {}
 
   private final SlackPostService slackPostService;
 
@@ -36,5 +39,10 @@ public class PostController {
   public ResponseEntity<Void> deletePost(@PathVariable String postId) {
     slackPostService.delete(postId);
     return ResponseEntity.noContent().build();
+  }
+
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex) {
+    return ResponseEntity.badRequest().body(new ApiError(false, ex.getMessage()));
   }
 }

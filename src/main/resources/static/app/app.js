@@ -260,6 +260,8 @@
     const [scheduledAt, setScheduledAt] = useState(props.initialScheduledAt || "");
     const [status, setStatus] = useState(null);
 
+    const minScheduledAt = isoToDatetimeLocalValue(new Date().toISOString());
+
     const { channels, channelsStatus } = useChannels(props.authToken);
 
     useEffect(() => {
@@ -270,6 +272,18 @@
 
     async function onSubmit(evt) {
       evt.preventDefault();
+
+      const scheduledDate = new Date(scheduledAt);
+      if (!scheduledAt || isNaN(scheduledDate.getTime())) {
+        setStatus("Please choose a valid scheduled time.");
+        return;
+      }
+
+      if (scheduledDate.getTime() < Date.now()) {
+        setStatus("Scheduled time must be now or in the future.");
+        return;
+      }
+
       setStatus("Scheduling...");
 
       const selectedChannel = channels.find((c) => c.id === channelId) || null;
@@ -284,7 +298,7 @@
           });
           setStatus(null);
         } catch (e) {
-          setStatus("Save failed.");
+          setStatus((e && e.message) || "Save failed.");
         }
         return;
       }
@@ -341,6 +355,7 @@
           e("input", {
             type: "datetime-local",
             value: scheduledAt,
+            min: minScheduledAt,
             onChange: (evt) => setScheduledAt(evt.target.value),
             required: true,
           })
@@ -431,7 +446,13 @@
       });
 
       if (!res.ok) {
-        throw new Error("save failed");
+        let err = null;
+        try {
+          err = await res.json();
+        } catch (e) {
+          // ignore
+        }
+        throw new Error((err && err.message) || "Save failed.");
       }
 
       await res.json();
@@ -543,7 +564,13 @@
       });
 
       if (!res.ok) {
-        throw new Error("save failed");
+        let err = null;
+        try {
+          err = await res.json();
+        } catch (e) {
+          // ignore
+        }
+        throw new Error((err && err.message) || "Save failed.");
       }
 
       const updated = await res.json();
@@ -609,7 +636,11 @@
                 )
               )
             ),
-            e("div", { className: "postText" }, p.text)
+            e(
+              "div",
+              { className: "postContentFrame" },
+              e("div", { className: "postText" }, p.text)
+            )
           )
         )
       ),
@@ -696,7 +727,11 @@
               e("span", { className: "postChannel" }, p.channelName || p.channelId),
               e("span", { className: "postTime" }, formatDateTime(p.scheduledAt))
             ),
-            e("div", { className: "postText" }, p.text)
+            e(
+              "div",
+              { className: "postContentFrame" },
+              e("div", { className: "postText" }, p.text)
+            )
           )
         )
       )

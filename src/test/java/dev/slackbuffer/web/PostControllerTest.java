@@ -50,6 +50,27 @@ class PostControllerTest {
   }
 
   @Test
+  void createPost_returnsBadRequestWhenServiceRejectsValidation() throws Exception {
+    SlackPostService slackPostService = mock(SlackPostService.class);
+    when(slackPostService.create(any(SlackPost.class)))
+        .thenThrow(new IllegalArgumentException("scheduledAt must be now or in the future"));
+
+    MockMvc mvc = MockMvcBuilders.standaloneSetup(new PostController(slackPostService)).build();
+
+    String json =
+        "{" +
+        "\"postId\":null," +
+        "\"channelId\":\"C123\"," +
+        "\"channelName\":\"#general\"," +
+        "\"text\":\"hello\"," +
+        "\"scheduledAt\":\"2000-01-01T00:00:00Z\"" +
+        "}";
+
+    mvc.perform(post("/v1/api/post").contentType(MediaType.APPLICATION_JSON).content(json))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void deletePost_returnsNoContentAndCallsService() throws Exception {
     SlackPostService slackPostService = mock(SlackPostService.class);
 
