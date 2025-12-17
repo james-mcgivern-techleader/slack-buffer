@@ -460,6 +460,35 @@
       return d.toLocaleString();
     }
 
+    async function onDelete(postId) {
+      const ok = window.confirm("Delete this scheduled post?");
+      if (!ok) return;
+
+      const headers = {};
+      if (props && props.authToken) {
+        headers.Authorization = "Bearer " + props.authToken;
+      }
+
+      setStatus("Deleting...");
+
+      try {
+        const res = await fetch("/v1/api/post/" + encodeURIComponent(postId), {
+          method: "DELETE",
+          headers,
+        });
+
+        if (!res.ok) {
+          throw new Error("delete failed");
+        }
+
+        setPosts((prev) => prev.filter((p) => p.postId !== postId));
+        setEditingPost((prev) => (prev && prev.postId === postId ? null : prev));
+        setStatus(null);
+      } catch (err) {
+        setStatus("Delete failed.");
+      }
+    }
+
     async function onEditSubmit(payload) {
       const headers = { "Content-Type": "application/json" };
       if (props && props.authToken) {
@@ -534,6 +563,18 @@
                     },
                   },
                   "Edit"
+                ),
+                e(
+                  "a",
+                  {
+                    href: "/delete",
+                    className: "link linkDanger",
+                    onClick: (evt) => {
+                      evt.preventDefault();
+                      onDelete(p.postId);
+                    },
+                  },
+                  "Delete"
                 )
               )
             ),

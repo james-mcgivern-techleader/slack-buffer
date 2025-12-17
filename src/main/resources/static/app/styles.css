@@ -69,6 +69,10 @@ body {
   text-decoration: underline;
 }
 
+.linkDanger {
+  color: #dc2626;
+}
+
 .card {
   background: #fff;
   border: 1px solid #eee;

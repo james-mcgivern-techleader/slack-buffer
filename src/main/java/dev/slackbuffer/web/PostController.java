@@ -3,6 +3,7 @@ package dev.slackbuffer.web;
 import dev.slackbuffer.model.SlackPost;
 import dev.slackbuffer.post.SlackPostService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,5 +24,11 @@ public class PostController {
   public ResponseEntity<SlackPost> updatePost(
       @PathVariable String postId, @RequestBody SlackPost post) {
     return ResponseEntity.ok(slackPostService.upsert(postId, post));
+  }
+
+  @DeleteMapping("/post/{postId}")
+  public ResponseEntity<Void> deletePost(@PathVariable String postId) {
+    slackPostService.delete(postId);
+    return ResponseEntity.noContent().build();
   }
 }
