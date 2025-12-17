@@ -205,20 +205,35 @@
     );
   }
 
-  function CreateView(props) {
-    const [text, setText] = useState("");
-    const [scheduledAt, setScheduledAt] = useState("");
-    const [channelId, setChannelId] = useState("");
+  function isoToDatetimeLocalValue(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+      d.getFullYear() +
+      "-" +
+      pad(d.getMonth() + 1) +
+      "-" +
+      pad(d.getDate()) +
+      "T" +
+      pad(d.getHours()) +
+      ":" +
+      pad(d.getMinutes())
+    );
+  }
+
+  function useChannels(authToken) {
     const [channels, setChannels] = useState([]);
     const [channelsStatus, setChannelsStatus] = useState("Loading channels...");
-    const [status, setStatus] = useState(null);
 
     useEffect(() => {
       (async () => {
         try {
           const headers = {};
-          if (props && props.authToken) {
-            headers.Authorization = "Bearer " + props.authToken;
+          if (authToken) {
+            headers.Authorization = "Bearer " + authToken;
           }
 
           const res = await fetch("/v1/api/user/channels", { headers });
@@ -228,10 +243,6 @@
           const list = Array.isArray(data) ? data : [];
           setChannels(list);
           setChannelsStatus(null);
-
-          if (!channelId && list.length > 0) {
-            setChannelId(list[0].id);
-          }
         } catch (err) {
           setChannels([]);
           setChannelsStatus("Failed to load channels.");
@@ -240,26 +251,58 @@
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    return { channels, channelsStatus };
+  }
+
+  function PostEditorForm(props) {
+    const [channelId, setChannelId] = useState(props.initialChannelId || "");
+    const [text, setText] = useState(props.initialText || "");
+    const [scheduledAt, setScheduledAt] = useState(props.initialScheduledAt || "");
+    const [status, setStatus] = useState(null);
+
+    const { channels, channelsStatus } = useChannels(props.authToken);
+
+    useEffect(() => {
+      if (channelId) return;
+      if (!channels || channels.length === 0) return;
+      setChannelId(channels[0].id);
+    }, [channels, channelId]);
+
     async function onSubmit(evt) {
       evt.preventDefault();
       setStatus("Scheduling...");
 
-      // TODO: wire up to real backend endpoint
-      // For now, simulate a successful schedule.
+      const selectedChannel = channels.find((c) => c.id === channelId) || null;
+
+      if (props.onSubmit) {
+        try {
+          await props.onSubmit({
+            channelId,
+            channelName: selectedChannel ? selectedChannel.name : null,
+            text,
+            scheduledAt,
+          });
+          setStatus(null);
+        } catch (e) {
+          setStatus("Save failed.");
+        }
+        return;
+      }
+
+      // Default stub behavior
       await Promise.resolve();
       setStatus(
         "Scheduled (stub) for channel " +
           (channelId || "(none)") +
-          ". Check Scheduled tab once backend is implemented."
+          ". Backend schedule/save is not implemented yet."
       );
     }
 
     const channelSelectDisabled = channels.length === 0;
 
     return e(
-      "div",
+      React.Fragment,
       null,
-      e("h1", null, "Create"),
       e(
         "form",
         { className: "form", onSubmit },
@@ -302,15 +345,84 @@
             required: true,
           })
         ),
-        e("button", { type: "submit" }, "Schedule")
+        e(
+          "div",
+          { className: "row" },
+          e("button", { type: "submit" }, props.submitLabel || "Schedule"),
+          props.onCancel
+            ? e(
+                "a",
+                {
+                  href: "/cancel",
+                  className: "link",
+                  onClick: (evt) => {
+                    evt.preventDefault();
+                    props.onCancel();
+                  },
+                },
+                "Cancel"
+              )
+            : null
+        )
       ),
       status ? e("p", { className: "muted" }, status) : null
+    );
+  }
+
+  function Modal(props) {
+    useEffect(() => {
+      function onKeyDown(evt) {
+        if (evt.key === "Escape") {
+          props.onClose();
+        }
+      }
+
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    }, [props]);
+
+    return e(
+      "div",
+      {
+        className: "modalOverlay",
+        onMouseDown: (evt) => {
+          if (evt.target === evt.currentTarget) props.onClose();
+        },
+      },
+      e(
+        "div",
+        { className: "modal" },
+        e(
+          "div",
+          { className: "modalHeader" },
+          e("div", { className: "modalTitle" }, props.title || ""),
+          e(
+            "button",
+            { className: "modalClose", onClick: props.onClose, type: "button" },
+            "×"
+          )
+        ),
+        e("div", { className: "modalBody" }, props.children)
+      )
+    );
+  }
+
+  function CreateView(props) {
+    return e(
+      "div",
+      null,
+      e("h1", null, "Create"),
+      e(PostEditorForm, {
+        authToken: props && props.authToken,
+        submitLabel: "Schedule",
+      })
     );
   }
 
   function ScheduledView(props) {
     const [posts, setPosts] = useState([]);
     const [status, setStatus] = useState("Loading scheduled posts...");
+    const [editingPost, setEditingPost] = useState(null);
 
     useEffect(() => {
       (async () => {
@@ -348,6 +460,46 @@
       return d.toLocaleString();
     }
 
+    async function onEditSubmit(payload) {
+      const headers = { "Content-Type": "application/json" };
+      if (props && props.authToken) {
+        headers.Authorization = "Bearer " + props.authToken;
+      }
+
+      const scheduledIso = new Date(payload.scheduledAt).toISOString();
+
+      const body = {
+        postId: editingPost.postId,
+        channelId: payload.channelId,
+        channelName: payload.channelName || editingPost.channelName,
+        text: payload.text,
+        scheduledAt: scheduledIso,
+      };
+
+      const res = await fetch("/v1/api/post/" + encodeURIComponent(editingPost.postId), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error("save failed");
+      }
+
+      const updated = await res.json();
+
+      const next = posts.map((p) => (p.postId === editingPost.postId ? updated : p));
+
+      next.sort((a, b) => {
+        const at = new Date(a.scheduledAt).getTime();
+        const bt = new Date(b.scheduledAt).getTime();
+        return at - bt;
+      });
+
+      setPosts(next);
+      setEditingPost(null);
+    }
+
     return e(
       "div",
       null,
@@ -362,17 +514,51 @@
         posts.map((p) =>
           e(
             "div",
-            { key: p.id, className: "postCard" },
+            { key: p.postId, className: "postCard" },
             e(
               "div",
               { className: "postMeta" },
               e("span", { className: "postChannel" }, p.channelName || p.channelId),
-              e("span", { className: "postTime" }, formatDateTime(p.scheduledAt))
+              e(
+                "div",
+                { className: "postMetaRight" },
+                e("span", { className: "postTime" }, formatDateTime(p.scheduledAt)),
+                e(
+                  "a",
+                  {
+                    href: "/edit",
+                    className: "link",
+                    onClick: (evt) => {
+                      evt.preventDefault();
+                      setEditingPost(p);
+                    },
+                  },
+                  "Edit"
+                )
+              )
             ),
             e("div", { className: "postText" }, p.text)
           )
         )
-      )
+      ),
+      editingPost
+        ? e(
+            Modal,
+            {
+              title: "Edit scheduled post",
+              onClose: () => setEditingPost(null),
+            },
+            e(PostEditorForm, {
+              authToken: props && props.authToken,
+              initialChannelId: editingPost.channelId,
+              initialText: editingPost.text,
+              initialScheduledAt: isoToDatetimeLocalValue(editingPost.scheduledAt),
+              submitLabel: "Schedule",
+              onCancel: () => setEditingPost(null),
+              onSubmit: onEditSubmit,
+            })
+          )
+        : null
     );
   }
 
@@ -431,7 +617,7 @@
         posts.map((p) =>
           e(
             "div",
-            { key: p.id, className: "postCard" },
+            { key: p.postId, className: "postCard" },
             e(
               "div",
               { className: "postMeta" },
