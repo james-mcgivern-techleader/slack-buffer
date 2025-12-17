@@ -408,6 +408,36 @@
   }
 
   function CreateView(props) {
+    async function onCreateSubmit(payload) {
+      const headers = { "Content-Type": "application/json" };
+      if (props && props.authToken) {
+        headers.Authorization = "Bearer " + props.authToken;
+      }
+
+      const scheduledIso = new Date(payload.scheduledAt).toISOString();
+
+      const body = {
+        postId: null,
+        channelId: payload.channelId,
+        channelName: payload.channelName,
+        text: payload.text,
+        scheduledAt: scheduledIso,
+      };
+
+      const res = await fetch("/v1/api/post", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error("save failed");
+      }
+
+      await res.json();
+      navigate("/scheduled");
+    }
+
     return e(
       "div",
       null,
@@ -415,6 +445,7 @@
       e(PostEditorForm, {
         authToken: props && props.authToken,
         submitLabel: "Schedule",
+        onSubmit: onCreateSubmit,
       })
     );
   }

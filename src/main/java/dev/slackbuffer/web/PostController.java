@@ -2,6 +2,7 @@ package dev.slackbuffer.web;
 
 import dev.slackbuffer.model.SlackPost;
 import dev.slackbuffer.post.SlackPostService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +19,11 @@ public class PostController {
 
   public PostController(SlackPostService slackPostService) {
     this.slackPostService = slackPostService;
+  }
+
+  @PostMapping("/post")
+  public ResponseEntity<SlackPost> createPost(@RequestBody SlackPost post) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(slackPostService.create(post));
   }
 
   @PostMapping("/post/{postId}")
